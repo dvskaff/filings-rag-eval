@@ -33,17 +33,17 @@ and evidence pages. Everything uses open models on a CPU: no API keys, no GPU.
 Rewritten automatically after every evaluation run.
 
 <!-- RESULTS:START -->
-_FinanceBench open-source sample: 150 questions · 84 filings · 44,074 passages · LLM: Qwen2.5-1.5B-Instruct (Q4_K_M, llama.cpp) · last run 2026-11-07 02:11 UTC_
+_FinanceBench open-source sample: 150 questions · 84 filings · 44,074 passages · LLM: Qwen2.5-1.5B-Instruct (Q4_K_M, llama.cpp) · last run 2026-11-07 03:24 UTC_
 
 | Metric | Result |
 |---|---|
 | Retrieval recall@5, single filing (hybrid + rerank) | 49% (BM25 alone 34%; MRR 0.37) |
-| Correct answers with RAG | 31% (refused 36%, wrong 33%) |
-| Correct answers without retrieval (closed book) | 19% |
+| Correct answers with RAG | 27% (refused 36%, wrong 37%) |
+| Correct answers without retrieval (closed book) | 14% |
 | Refuses when given the wrong company's filing | 84% of 38 |
 | Answers citing the gold evidence page | 12% |
-| Grader agreement with FinanceBench human labels | 86% of 600 answers |
-| Reference: published GPT-4 Turbo + retrieval (same grader / human label) | 40% / 50% |
+| Grader agreement with FinanceBench human labels | 85% of 600 answers |
+| Reference: published GPT-4 Turbo + retrieval (same grader / human label) | 38% / 50% |
 
 **API image:** `docker run -p 8000:8000 ghcr.io/dvskaff/filings-rag-api:latest`
 <!-- RESULTS:END -->
