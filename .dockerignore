@@ -1,0 +1,10 @@
+*
+!serving/requirements.txt
+!serving/app/
+!serving/index/
+!src/filings/__init__.py
+!src/filings/config.py
+!src/filings/retrieval.py
+!src/filings/llm.py
+!scripts/fetch_models.py
+**/__pycache__
