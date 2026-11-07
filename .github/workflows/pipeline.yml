@@ -1,0 +1,133 @@
+name: Evaluation
+
+# Full evaluation on the FinanceBench sample with the real models, then the dashboard, README results and the API
+# image. The benchmark is fixed, so this runs when the code changes (or by hand), not on a schedule. Answers are
+# cached by prompt, so a re-run only pays for what changed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      question_limit:
+        description: "Only the first N questions (0 = all 150)"
+        type: string
+        default: "0"
+
+permissions:
+  contents: write # save the cache as a release asset and commit README results
+  packages: write # push the API image to ghcr.io
+  pages: write
+  id-token: write
+
+concurrency:
+  group: evaluation
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/dvskaff/filings-rag-api
+  FASTEMBED_CACHE_PATH: /home/runner/.cache/fastembed
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Test before the real run
+        run: pytest -q
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/fastembed
+          key: models-bge-small-minilm-qwen2.5-1.5b-q4km
+
+      - name: Restore the evaluation cache (embeddings, generated answers, last recall) from the last run
+        run: |
+          mkdir -p data
+          if gh release download state --pattern "cache.tar.zst" --dir data; then
+            tar -I zstd -xf data/cache.tar.zst -C data && rm data/cache.tar.zst && ls -la data/cache
+          else
+            echo "No cache yet: the first run generates every answer (about an hour on a CPU)."
+          fi
+
+      - name: Run the evaluation
+        id: run
+        run: python -m filings.pipeline
+        env:
+          PYTHONPATH: src
+          RAG_QUESTION_LIMIT: ${{ inputs.question_limit || '0' }}
+
+      - name: Save the cache for the next run
+        run: |
+          tar -I "zstd -T0 -10" -cf cache.tar.zst -C data cache
+          ls -lh cache.tar.zst
+          gh release view state > /dev/null 2>&1 || gh release create state --latest=false \
+            --title "Evaluation cache" --notes "Passage embeddings, every generated answer (keyed by prompt) and the last recall@5."
+          gh release upload state cache.tar.zst --clobber
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Does the image for this index exist?
+        id: image
+        run: |
+          TAG="index-${{ steps.run.outputs.bundle }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if docker manifest inspect "$IMAGE:$TAG" > /dev/null 2>&1; then
+            echo "build=false" >> "$GITHUB_OUTPUT"; echo "$IMAGE:$TAG already published"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build, smoke-test with a real question, and push the API image
+        if: steps.image.outputs.build == 'true'
+        run: |
+          docker build -t "$IMAGE:${{ steps.image.outputs.tag }}" -t "$IMAGE:latest" .
+          docker run -d --name api -p 8000:8000 "$IMAGE:latest"
+          for i in $(seq 120); do curl -sf localhost:8000/health && break; sleep 2; done
+          curl -sf -X POST localhost:8000/ask -H "Content-Type: application/json" \
+            -d '{"question": "What is the FY2018 capital expenditure amount (in USD millions) for 3M?", "doc_name": "3M_2018_10K"}' > ask.json
+          python -c "import json; r=json.load(open('ask.json')); assert r['answer'] and r['passages']; print('API OK:', r['answer'][:200], [c['page'] for c in r['citations']])"
+          docker push "$IMAGE:${{ steps.image.outputs.tag }}"
+          docker push "$IMAGE:latest"
+
+      - name: Commit README results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if ! git diff --staged --quiet; then
+            git commit -m "Evaluation results"
+            git pull --rebase -X theirs
+            git push
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
