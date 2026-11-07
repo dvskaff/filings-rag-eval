@@ -32,3 +32,13 @@ def test_helpers():
     assert answer_kind("The Consumer Health business segment will be treated as discontinued.") == "text"
     assert numbers("In FY2023 revenue was 1,234.5 million (up 3%) [2]") == [(1234.5, "million"), (3.0, "%")]
     assert polarity("Unfortunately the margin declined.") == "no" and polarity("It improved.") == "yes"
+    assert numbers("Adj. EBITDA was $2,018mn in FY 2023") == [(2018.0, "mn")]  # not mistaken for a year
+
+
+def test_restating_the_question_is_not_credit():
+    q = "Among operations, investing, and financing activities, which brought in the most cash flow for Nike?"
+    gold = "Among the three, cash flow from operations was the highest for Nike."
+    wrong = "Among operations, investing and financing, investing activities brought in the most cash flow for Nike."
+    assert grade(wrong, gold) == "Correct"  # without the question, shared words look like evidence...
+    assert grade(wrong, gold, question=q) == "Incorrect"  # ...with it, only the words that answer it count
+    assert grade("Operations had the highest cash flow of the three.", gold, question=q) == "Correct"

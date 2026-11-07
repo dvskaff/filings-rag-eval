@@ -66,14 +66,14 @@ def generation_eval(cfg, retriever: Retriever, model, q: pd.DataFrame) -> pd.Dat
         cited = L.citations(ans, len(hits))
         ev = set(r.evidence_pages)
         rows.append({"financebench_id": r.financebench_id, "setting": "RAG (single filing)", "question": r.question,
-                     "doc_name": r.doc_name, "gold": r.answer, "kind": kind, "answer": ans, "grade": grade(ans, r.answer, kind),
+                     "doc_name": r.doc_name, "gold": r.answer, "kind": kind, "answer": ans, "grade": grade(ans, r.answer, kind, r.question),
                      "cited": cited, "context_has_evidence": any((h.doc_name, h.page) in ev for h in hits),
                      "cited_evidence": any((hits[i - 1].doc_name, hits[i - 1].page) in ev for i in cited),
                      "pages": [h.page + 1 for h in hits], "seconds": time.time() - t0})  # fmt: skip
         closed = model.chat(L.closed_messages(r.question), 128)
         rows.append({"financebench_id": r.financebench_id, "setting": "Closed book (no retrieval)", "question": r.question,
                      "doc_name": r.doc_name, "gold": r.answer, "kind": kind, "answer": closed,
-                     "grade": grade(closed, r.answer, kind)})  # fmt: skip
+                     "grade": grade(closed, r.answer, kind, r.question)})  # fmt: skip
         if n % cfg.unanswerable_every == 0:
             other = wrong_filing(q, r)
             hits = retriever.search(
@@ -82,7 +82,7 @@ def generation_eval(cfg, retriever: Retriever, model, q: pd.DataFrame) -> pd.Dat
             wrong = model.chat(L.rag_messages(r.question, other, hits), cfg.max_answer_tokens)
             rows.append({"financebench_id": r.financebench_id, "setting": "Wrong filing (should refuse)",
                          "question": r.question, "doc_name": other, "gold": r.answer, "kind": kind, "answer": wrong,
-                         "grade": grade(wrong, r.answer, kind)})  # fmt: skip
+                         "grade": grade(wrong, r.answer, kind, r.question)})  # fmt: skip
         if (n + 1) % 10 == 0:
             log.info("Generated answers for %d/%d questions", n + 1, len(q))
     return pd.DataFrame(rows)
@@ -119,9 +119,11 @@ def grader_validation(reference: pd.DataFrame, q: pd.DataFrame) -> dict:
     gold = q.set_index("financebench_id")["answer"]
     ref = reference[reference["financebench_id"].isin(gold.index)].copy()
     ref["gold"] = ref["financebench_id"].map(gold)
+    ref["q"] = ref["financebench_id"].map(q.set_index("financebench_id")["question"])
     ref["kind"] = ref["gold"].map(answer_kind)
     ref["auto"] = [
-        grade(a, g, k) for a, g, k in zip(ref["model_answer"], ref["gold"], ref["kind"], strict=True)
+        grade(a, g, k, qq)
+        for a, g, k, qq in zip(ref["model_answer"], ref["gold"], ref["kind"], ref["q"], strict=True)
     ]
     agree = ref["auto"] == ref["label"]
     modes = {m: {"n": int(len(d)), "human_correct": float((d["label"] == "Correct").mean()),

@@ -178,10 +178,11 @@ was not, {_pct(no_ev)}. That splits the errors into retrieval misses and reasoni
 <section><h2>Can the grader be trusted?</h2>
 <p>Answers are graded automatically: numbers must match the gold answer within 1.5% (in any of the usual units),
 yes/no answers must have the same polarity, free-text answers must contain at least half of the gold answer's key
-terms, and refusals are detected by phrasing. Checked against FinanceBench's {val.get("n", 0)} human-labeled GPT-4
-answers, it agrees {_pct(val.get("agreement"))} of the time ({_pct(val.get("by_kind", {}).get("numeric"))} on numeric
-answers). It is stricter than the human reviewers, so accuracy here is if anything understated. The grader was tuned
-on those labels, so the agreement figure is optimistic for new data.</p>
+terms (words the question already contains don't count, so restating the question earns nothing), and refusals are
+detected by phrasing. Checked against FinanceBench's {val.get("n", 0)} human-labeled GPT-4 answers, it agrees
+{_pct(val.get("agreement"))} of the time ({_pct(val.get("by_kind", {}).get("numeric"))} on numeric answers, less on
+free text). On those answers it marks fewer correct than the human reviewers did. The grader was tuned on those
+labels, so the agreement figure is optimistic for new data, and free-text grades are approximate.</p>
 </section>
 
 <section><h2>Example answers</h2>

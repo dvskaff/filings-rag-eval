@@ -18,26 +18,28 @@ REFUSAL = re.compile(
     r"(?:stated|mentioned|reported|shown|included|provided)|would need|i'm sorry|i am sorry|unfortunately)",
     re.I,
 )
-NUM = re.compile(r"(?<![\w.])[-−(]?\$?\s?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s*(%|percent|billion|bn|million|mm|m\b|thousand|k\b)?",
+NUM = re.compile(r"(?<![\w.])[-−(]?\$?\s?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s*(%|percent|billion|bn|million|mn|mm|m\b|thousand|k\b)?",
                  re.I)  # fmt: skip
 NOISE = re.compile(
     r"\[\d+(?:\s*,\s*\d+)*\]|\b\d{1,2}-[KQ]\b|\bQ[1-4]\b|\bFY\d{2,4}\b", re.I
 )  # citations, form names, periods
-SCALE = {"billion": 1e9, "bn": 1e9, "million": 1e6, "mm": 1e6, "m": 1e6, "thousand": 1e3, "k": 1e3}
+SCALE = {"billion": 1e9, "bn": 1e9, "million": 1e6, "mn": 1e6, "mm": 1e6, "m": 1e6, "thousand": 1e3, "k": 1e3}
 STOP = set(
     "the a an of in to for and or is are was were be by on at as with that this its it from than which".split()
 )
 
 
 def numbers(text: str) -> list[tuple[float, str]]:
-    """Every number in the text with its unit word ('' if none). Years (1990-2039) without units are skipped."""
+    """Every number in the text with its unit word ('' if none). Years (1990-2039 written plainly, without a unit,
+    $ or thousands separator) are skipped."""
     out = []
     text = NOISE.sub(" ", str(text).replace("−", "-"))
     for m in NUM.finditer(text):
         raw = m.group(1).replace(",", "") + (m.group(2) or "")
         unit = (m.group(3) or "").lower()
         v = float(raw)
-        if not unit and m.group(2) is None and 1990 <= v <= 2039:
+        plain = "$" not in m.group(0) and "," not in m.group(1)
+        if not unit and m.group(2) is None and plain and 1990 <= v <= 2039:
             continue
         out.append((v, unit))
     return out
@@ -92,16 +94,17 @@ def polarity(answer: str) -> str | None:
     return "no" if NEGATIVE.search(first) else "yes"
 
 
-def grade(answer: str, gold, kind: str | None = None) -> str:
-    """'Correct', 'Incorrect' or 'Refusal'."""
+def grade(answer: str, gold, kind: str | None = None, question: str = "") -> str:
+    """'Correct', 'Incorrect' or 'Refusal'. With the question, words the gold answer merely repeats from it don't count
+    as evidence for free-text answers (otherwise restating the question would look correct)."""
     a = str(answer or "").strip()
     kind = kind or answer_kind(str(gold))
     if not a or REFUSAL.search(a):
         return "Refusal"
-    return "Correct" if _has_match(a, str(gold), kind) else "Incorrect"
+    return "Correct" if _has_match(a, str(gold), kind, question) else "Incorrect"
 
 
-def _has_match(a: str, gold: str, kind: str) -> bool:
+def _has_match(a: str, gold: str, kind: str, question: str = "") -> bool:
     if kind == "numeric":
         g = numbers(gold)[0]
         targets = _variants(*g)
@@ -109,6 +112,7 @@ def _has_match(a: str, gold: str, kind: str) -> bool:
     if kind == "yes/no":
         return polarity(a) == gold.strip().lower().split()[0].strip(".,")
     gt, at = tokens(gold), tokens(a)
+    gt = (gt - tokens(question)) or gt  # the key terms the question doesn't already give away
     if not gt:
         return False
     recall = len(gt & at) / len(gt)
