@@ -5,7 +5,9 @@
 ![Python](https://img.shields.io/badge/python-3.13-blue) ![llama.cpp](https://img.shields.io/badge/LLM-llama.cpp-black)
 ![ONNX](https://img.shields.io/badge/embeddings-ONNX%20Runtime-lightgrey) ![FastAPI](https://img.shields.io/badge/FastAPI-0.162-teal)
 
-**Live dashboard: https://dvskaff.github.io/filings-rag-eval/** · **API reference: https://dvskaff.github.io/filings-rag-eval/api.html**
+* **Dashboard:** [evaluation results](https://dvskaff.github.io/filings-rag-eval/)
+* **Explorer:** [every question, the passages retrieved, the answer and its grade](https://dvskaff.github.io/filings-rag-eval/questions.html)
+* **API:** [reference for the Q&A API](https://dvskaff.github.io/filings-rag-eval/api.html)
 
 Can a system answer analysts' questions about 10-Ks, 10-Qs and earnings reports correctly, show where each answer came
 from, and say "I don't know" instead of guessing? This project builds a retrieval-augmented generation (RAG) system
@@ -24,6 +26,10 @@ and evidence pages. Everything uses open models on a CPU: no API keys, no GPU.
   * refusal on control questions given the *wrong company's* filing.
   * Answers are graded by an automatic grader that is itself **validated against FinanceBench's human labels** on
     published GPT-4 Turbo answers.
+* **Question explorer:** a [page](https://dvskaff.github.io/filings-rag-eval/questions.html) with every question:
+  the passages the model saw (marked when they come from a gold evidence page or were cited), its answer, the
+  closed-book and wrong-filing answers, the gold answer with FinanceBench's evidence, and the grades. Filter by grade,
+  answer type or whether the evidence was retrieved to see where the errors come from.
 * **Production pieces:** a quality gate that stops publishing if retrieval regresses, an answer cache that makes
   unchanged re-runs free, and a FastAPI service packaged in a Docker image on GitHub Container Registry (index and all
   models inside), smoke-tested with a real question before every push.
@@ -50,6 +56,24 @@ _FinanceBench open-source sample: 150 questions · 84 filings · 44,074 passages
 
 ## How it works
 
+```mermaid
+flowchart LR
+    FB["FinanceBench<br/>150 questions, 84 filings"] --> PDF["PDF pages<br/>to passages"]
+    PDF --> BM25["BM25<br/>keyword search"]
+    PDF --> EMB["bge-small embeddings<br/>ONNX"]
+    BM25 --> RRF["Reciprocal-rank<br/>fusion"]
+    EMB --> RRF
+    RRF --> RERANK["Cross-encoder<br/>rerank"]
+    RERANK --> GATE{{"Quality gate<br/>recall@5"}}
+    GATE --> LLM["Qwen2.5-1.5B<br/>llama.cpp, cited answers"]
+    LLM --> GRADE["Grader<br/>validated vs. human labels"]
+    GRADE --> SITE["Dashboard, explorer<br/>+ README results"]
+    RERANK --> API["FastAPI image<br/>on GHCR"]
+    LLM --> API
+```
+
+<details><summary>Every step in detail</summary>
+
 ```
 FinanceBench (pinned commit): 150 questions · gold answers · evidence pages · 84 filings (PDF) · published GPT-4 answers + human labels
    │ src/filings/corpus.py      PDF → page text (pdfium) → ~1,200-char passages on line breaks (tables stay whole)
@@ -63,8 +87,10 @@ src/filings/llm.py              Qwen2.5-1.5B-Instruct (llama.cpp): RAG · closed
 src/filings/grading.py          Correct / Incorrect / Refusal: numbers within 1.5% in any unit, yes/no polarity,
                                 key-term recall, refusal phrasing; validated against human labels
    ▼
-dashboard + API reference (GitHub Pages) · README results · Docker image (FastAPI + index + models) on GHCR
+dashboard + question explorer + API reference (GitHub Pages) · README results · Docker image (FastAPI + index + models) on GHCR
 ```
+
+</details>
 
 ### API
 
@@ -89,6 +115,7 @@ grader was tuned on the published human labels, so its agreement figure is optim
 
 ```
 src/filings/   config · corpus · retrieval · llm · grading · evaluate · pipeline · report · readme
+               explorer.py: exports every question's passages, answers and grades for the question explorer
                fixture.py: SYNTHETIC filings (tiny PDFs) and questions for tests (pages built from it say so)
 serving/       app/main.py (FastAPI) · requirements.txt (API image only)
 scripts/       fetch_models.py (downloads the three models into the image)

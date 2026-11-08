@@ -18,7 +18,14 @@ def run(cfg):
 
 def test_pipeline_builds_site_bundle_and_readme(cfg, run):
     assert run["questions"] == 6 and run["passages"] > 0
-    for f in ("index.html", "api.html", "openapi.json", "results.json"):
+    for f in (
+        "index.html",
+        "api.html",
+        "openapi.json",
+        "results.json",
+        "questions.html",
+        "data/questions.json",
+    ):
         assert (cfg.site_dir / f).exists()
     assert "SYNTHETIC TEST DATA" in (cfg.site_dir / "index.html").read_text()
     meta = json.loads((cfg.bundle_dir / "meta.json").read_text())

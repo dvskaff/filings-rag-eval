@@ -54,6 +54,14 @@ def wrong_filing(q: pd.DataFrame, r) -> str:
     return others[int(str(r.financebench_id).split("_")[-1]) % len(others)] if others else r.doc_name
 
 
+def _passages(hits, evidence: set, cited: list[int]) -> list[dict]:
+    """The excerpts the model saw, for the question explorer: filing, page, score, text, and whether each is a gold
+    evidence page and was cited by the answer."""
+    return [{"n": i, "doc_name": h.doc_name, "page": h.page + 1, "score": round(float(h.score), 3), "text": h.text,
+             "evidence": (h.doc_name, h.page) in evidence, "cited": i in cited}
+            for i, h in enumerate(hits, start=1)]  # fmt: skip
+
+
 def generation_eval(cfg, retriever: Retriever, model, q: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for n, r in enumerate(q.itertuples()):
@@ -69,7 +77,8 @@ def generation_eval(cfg, retriever: Retriever, model, q: pd.DataFrame) -> pd.Dat
                      "doc_name": r.doc_name, "gold": r.answer, "kind": kind, "answer": ans, "grade": grade(ans, r.answer, kind, r.question),
                      "cited": cited, "context_has_evidence": any((h.doc_name, h.page) in ev for h in hits),
                      "cited_evidence": any((hits[i - 1].doc_name, hits[i - 1].page) in ev for i in cited),
-                     "pages": [h.page + 1 for h in hits], "seconds": time.time() - t0})  # fmt: skip
+                     "pages": [h.page + 1 for h in hits], "seconds": time.time() - t0,
+                     "passages": _passages(hits, ev, cited)})  # fmt: skip
         closed = model.chat(L.closed_messages(r.question), 128)
         rows.append({"financebench_id": r.financebench_id, "setting": "Closed book (no retrieval)", "question": r.question,
                      "doc_name": r.doc_name, "gold": r.answer, "kind": kind, "answer": closed,
@@ -82,7 +91,8 @@ def generation_eval(cfg, retriever: Retriever, model, q: pd.DataFrame) -> pd.Dat
             wrong = model.chat(L.rag_messages(r.question, other, hits), cfg.max_answer_tokens)
             rows.append({"financebench_id": r.financebench_id, "setting": "Wrong filing (should refuse)",
                          "question": r.question, "doc_name": other, "gold": r.answer, "kind": kind, "answer": wrong,
-                         "grade": grade(wrong, r.answer, kind, r.question)})  # fmt: skip
+                         "grade": grade(wrong, r.answer, kind, r.question),
+                         "passages": _passages(hits, set(), L.citations(wrong, len(hits)))})  # fmt: skip
         if (n + 1) % 10 == 0:
             log.info("Generated answers for %d/%d questions", n + 1, len(q))
     return pd.DataFrame(rows)

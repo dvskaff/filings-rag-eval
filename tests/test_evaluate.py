@@ -22,6 +22,18 @@ def test_generation_eval_settings_and_cache(cfg, bench, tmp_path):
         s["Wrong filing (should refuse)"]["refusal"] == 1.0
     )  # the stand-in refuses other companies' filings
     assert s["RAG (single filing)"]["citation_rate"] == 1.0
+    # the question explorer gets the passages each answer was based on, flagged as evidence / cited
+    from filings import explorer
+
+    rag = g[g["setting"] == "RAG (single filing)"]
+    for row in rag.itertuples():
+        assert [p["page"] for p in row.passages] == row.pages
+        assert any(p["evidence"] for p in row.passages) == row.context_has_evidence
+        assert any(p["evidence"] and p["cited"] for p in row.passages) == row.cited_evidence
+    qs = explorer.export(g, q)
+    assert len(qs) == len(q) and all(x["rag"]["passages"] and x["closed"] for x in qs)
+    assert sum(x["wrong"] is not None for x in qs) == (g["setting"] == "Wrong filing (should refuse)").sum()
+    assert all(e["page"] >= 1 and e["text"] for x in qs for e in x["evidence"])
     again = L.CachedLLM(L.FakeLLM(), tmp_path / "gen.jsonl")
     evaluate.generation_eval(cfg, r, again, q)
     assert again.misses == 0 and again.hits == len(g)

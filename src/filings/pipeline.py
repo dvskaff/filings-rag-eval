@@ -108,6 +108,9 @@ def run(cfg: Config) -> dict:
     from .report import build_site
 
     summary = build_site(cfg, run_info, gen, ranks, q)
+    from . import explorer  # every question, its retrieved passages, answers and grades (site/questions.html)
+
+    explorer.write_page(cfg.site_dir, explorer.export(gen, q), run_info, cfg.repo_url, cfg.fixture)
     if not cfg.fixture:
         update_readme(cfg.readme_path, summary)
     out = os.environ.get("GITHUB_OUTPUT")

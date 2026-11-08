@@ -145,7 +145,8 @@ def build_site(cfg: Config, run: dict, gen: pd.DataFrame, ranks: pd.DataFrame, q
   <p>Can a system answer analysts' questions about 10-Ks, 10-Qs and earnings reports correctly, show where the answer
   came from, and say "I don't know" instead of guessing? Evaluated on the {run["questions"]} open-source FinanceBench
   questions over {run["documents"]} real filings ({run["passages"]:,} passages), using only open models on a CPU.</p>
-  <a class="btn" href="{cfg.repo_url}">Code on GitHub</a><a class="btn" href="api.html">API reference</a>
+  <a class="btn" href="questions.html">Explore every question</a><a class="btn" href="api.html">API reference</a>
+  <a class="btn" href="{cfg.repo_url}">Code on GitHub</a>
 </div></header>
 <main>
 <div class="cards">{cards}</div>
@@ -186,6 +187,9 @@ labels, so the agreement figure is optimistic for new data, and free-text grades
 </section>
 
 <section><h2>Example answers</h2>
+<p>A few examples below; the <b><a href="questions.html">question explorer</a></b> has all {run["questions"]}, with
+the passages the model saw, which of them came from the gold evidence page, and the closed-book and wrong-filing
+answers.</p>
 <div class="tablewrap"><table class="qa"><thead><tr><th>Question</th><th>Gold answer</th><th>System answer</th><th>Grade</th></tr></thead>
 <tbody>{"".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in qa_rows)}</tbody></table></div>
 </section>
