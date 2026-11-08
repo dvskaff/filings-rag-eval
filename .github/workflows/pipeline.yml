@@ -42,8 +42,21 @@ jobs:
           cache: pip
           cache-dependency-path: requirements*.txt
 
+      # llama.cpp is compiled from source. Built with the default "native" flags, it uses every instruction the build
+      # machine has (e.g. AVX-512), and pip's cache then hands that build to runners whose CPUs lack them ("Illegal
+      # instruction"). Build it once for any modern x86-64 CPU (AVX2), keep that wheel, and always install it.
+      - uses: actions/cache@v4
+        id: llama-wheel
+        with:
+          path: wheels
+          key: llama-cpp-python-0.3.36-portable-py3.13
+
+      - name: Build llama-cpp-python for any x86-64 CPU (first run only, then cached)
+        if: steps.llama-wheel.outputs.cache-hit != 'true'
+        run: CMAKE_ARGS="-DGGML_NATIVE=OFF" pip wheel --no-cache-dir --no-deps -w wheels llama-cpp-python==0.3.36
+
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install --find-links wheels --only-binary llama-cpp-python -r requirements-dev.txt
 
       - name: Test before the real run
         run: pytest -q
