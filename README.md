@@ -39,7 +39,7 @@ and evidence pages. Everything uses open models on a CPU: no API keys, no GPU.
 Rewritten automatically after every evaluation run.
 
 <!-- RESULTS:START -->
-_FinanceBench open-source sample: 150 questions · 84 filings · 44,074 passages · LLM: Qwen2.5-1.5B-Instruct (Q4_K_M, llama.cpp) · last run 2026-11-07 03:24 UTC_
+_FinanceBench open-source sample: 150 questions · 84 filings · 44,074 passages · LLM: Qwen2.5-1.5B-Instruct (Q4_K_M, llama.cpp) · last run 2026-11-08 23:05 UTC_
 
 | Metric | Result |
 |---|---|
